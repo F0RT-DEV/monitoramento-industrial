@@ -39,5 +39,5 @@ Em uma fábrica, uma máquina que quebra de repente para a produção e gera pre
 \- Há um vídeo de demonstração de 2 a 3 minutos.
 
 \#\# 8\. Cronograma  
-\- Planejado e acompanhado no \[quadro do projeto no GitHub\] [https\://github.com/users/F0RT-DEV/projects/2](https://github.com/users/F0RT-DEV/projects/2) . Entrega prevista da v1.0: 18/12/2026.
+\- Planejado e acompanhado no \[quadro do projeto no GitHub\] [https\://github.com/users/F0RT-DEV/projects/2](https://github.com/users/F0RT-DEV/projects/2). Entrega prevista da v1.0: 18/12/2026.
 
