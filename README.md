@@ -34,6 +34,11 @@ flowchart LR
     N -->|notifica| E[E-mail / Telegram]
     F[Painel React] -->|GET| A
 ```
+## Modelo de dados
+
+[Diagrama entidade-relacionamento](docs/modelo-de-dados.png)
+
+O código-fonte do diagrama está em [docs/modelo-de-dados.dbml](docs/modelo-de-dados.dbml).
 
 ## Stack
 
