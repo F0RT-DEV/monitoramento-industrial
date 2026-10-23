@@ -1,0 +1,55 @@
+Table machines {
+  id bigint [pk, increment]
+  name text [not null, unique]
+  sector text
+  operational_status text [not null, default: 'running', note: 'running | stopped | maintenance']
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table sensors {
+  id bigint [pk, increment]
+  machine_id bigint [not null, ref: > machines.id]
+  type text [not null, note: 'temperature | vibration']
+  unit text [not null]
+
+  indexes {
+    (machine_id, type) [unique]
+  }
+}
+
+Table rules {
+  id bigint [pk, increment]
+  sensor_id bigint [not null, ref: > sensors.id]
+  severity text [not null, note: 'warning | critical']
+  operator text [not null, note: '> | <']
+  threshold numeric [not null]
+  active boolean [not null, default: true]
+
+  indexes {
+    (sensor_id, severity, operator) [unique]
+  }
+}
+
+Table readings {
+  id bigint [pk, increment]
+  sensor_id bigint [not null, ref: > sensors.id]
+  value numeric [not null]
+  read_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (sensor_id, read_at)
+  }
+}
+
+Table alerts {
+  id bigint [pk, increment]
+  rule_id bigint [not null, ref: > rules.id]
+  reading_id bigint [not null, ref: > readings.id]
+  message text [not null]
+  created_at timestamptz [not null, default: `now()`]
+  acknowledged_at timestamptz [note: 'NULL = alerta aberto']
+
+  indexes {
+    (rule_id, reading_id) [unique]
+  }
+}
