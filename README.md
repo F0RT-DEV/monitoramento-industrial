@@ -53,7 +53,21 @@ O código-fonte do diagrama está em [docs/modelo-de-dados.dbml](docs/modelo-de-
 
 ## Como rodar
 
-Em breve, quando a v1.0 estiver pronta.
+## Como rodar o banco (desenvolvimento)
+
+Com o Docker Desktop aberto, na pasta do projeto:
+
+```bash
+docker run --name monitor-db -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=monitoramento -p 5432:5432 -v "$(pwd)/sql:/docker-entrypoint-initdb.d" -d postgres:16
+```
+
+Para conferir as tabelas:
+
+```bash
+docker exec -it monitor-db psql -U postgres -d monitoramento -c "\dt"
+```
+
+Para recomeçar do zero: `docker rm -f monitor-db` e repita o primeiro comando.
 
 ## Roadmap
 
