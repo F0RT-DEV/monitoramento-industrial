@@ -13,7 +13,7 @@
 | 2.4 | Escrever o script de dados iniciais (máquinas, sensores e regras) | 1 | 23/10 |
 | 2.5 | Escrever 5 consultas de prática e salvar em `sql/` | 1,5 | 23/10 |
 
-## Etapa 3 — API (26/10 a 06/11) · ~21h
+## Etapa 3 — API (26/10 a 06/11) · ~22h
 
 | # | Tarefa | Horas | Prazo |
 |---|---|---|---|
@@ -29,8 +29,9 @@
 | 3.10 | Padronizar erros e códigos HTTP (middleware) | 2 | 04/11 |
 | 3.11 | Documentar os endpoints em um arquivo `.http` | 2 | 05/11 |
 | 3.12 | Testar manualmente todos os endpoints | 1 | 06/11 |
+| 3.13 | Criar PATCH /machines/:id/status | 1 | 06/11 |
 
-## Etapa 4 — Simulador (09/11 a 13/11) · ~8,5h
+## Etapa 4 — Simulador (09/11 a 13/11) · ~9h
 
 | # | Tarefa | Horas | Prazo |
 |---|---|---|---|
@@ -41,6 +42,7 @@
 | 4.5 | Parametrizar URL, intervalo e quantidade de máquinas por variáveis de ambiente | 1 | 12/11 |
 | 4.6 | Tratar falhas de rede com nova tentativa | 1 | 13/11 |
 | 4.7 | Rodar por 10 minutos e conferir os dados no banco | 0,5 | 13/11 |
+| 4.8 | Enviar mudanças de status operacional da máquina pelo simulador | 0,5 | 13/11 |
 
 ## Etapa 5 — Dashboard (16/11 a 27/11) · ~21h
 
