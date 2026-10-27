@@ -1,4 +1,6 @@
+import "dotenv/config";
 import express from "express";
+import { checkConnection } from "./db/pool";
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -9,6 +11,17 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-app.listen(port, () => {
-  console.log(`API rodando em http://localhost:${port}`);
-});
+async function start() {
+  try {
+    await checkConnection();
+  } catch (error) {
+    console.error("Não foi possível conectar ao banco:", (error as Error).message);
+    process.exit(1);
+  }
+
+  app.listen(port, () => {
+    console.log(`API rodando em http://localhost:${port}`);
+  });
+}
+
+start();
