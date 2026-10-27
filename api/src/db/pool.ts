@@ -8,7 +8,16 @@ if (!connectionString) {
   );
 }
 
-export const pool = new Pool({ connectionString });
+export const pool = new Pool({
+  connectionString,
+  connectionTimeoutMillis: 3000,
+});
+
+// Conexões ociosas podem cair quando o banco reinicia.
+// Sem este tratamento, o erro derruba a API inteira.
+pool.on("error", (error) => {
+  console.error("Erro em conexão ociosa do banco:", error.message);
+});
 
 export async function checkConnection(): Promise<void> {
   const result = await pool.query<{ db: string }>(
