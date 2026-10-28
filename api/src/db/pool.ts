@@ -1,4 +1,7 @@
-import { Pool } from "pg";
+import { Pool, types } from "pg";
+
+types.setTypeParser(types.builtins.INT8, (value) => Number(value));
+types.setTypeParser(types.builtins.NUMERIC, (value) => Number(value));
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -13,8 +16,7 @@ export const pool = new Pool({
   connectionTimeoutMillis: 3000,
 });
 
-// Conexões ociosas podem cair quando o banco reinicia.
-// Sem este tratamento, o erro derruba a API inteira.
+
 pool.on("error", (error) => {
   console.error("Erro em conexão ociosa do banco:", error.message);
 });
