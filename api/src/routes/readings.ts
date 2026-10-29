@@ -1,9 +1,26 @@
-import { Router } from "express";
+import { Router, type Response } from "express";
 import { z } from "zod";
 import { pool } from "../db/pool";
 
 export const readingsRouter = Router();
 
+// Resposta padrão para dados inválidos (400)
+function sendValidationError(res: Response, error: z.ZodError) {
+  res.status(400).json({
+    error: {
+      code: "VALIDATION_ERROR",
+      message: "Dados inválidos",
+      details: error.issues.map((issue) => ({
+        field: issue.path.join("."),
+        message: issue.message,
+      })),
+    },
+  });
+}
+
+// ---------------------------------------------------------------
+// POST /readings: grava uma leitura
+// ---------------------------------------------------------------
 const createReadingSchema = z.object(
   {
     sensorId: z
@@ -25,16 +42,7 @@ readingsRouter.post("/", async (req, res) => {
   const parsed = createReadingSchema.safeParse(req.body);
 
   if (!parsed.success) {
-    res.status(400).json({
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Dados inválidos",
-        details: parsed.error.issues.map((issue) => ({
-          field: issue.path.join("."),
-          message: issue.message,
-        })),
-      },
-    });
+    sendValidationError(res, parsed.error);
     return;
   }
 
@@ -50,7 +58,7 @@ readingsRouter.post("/", async (req, res) => {
 
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    
+    // 23503 = violação de chave estrangeira (o sensor não existe)
     if ((error as { code?: string }).code === "23503") {
       res.status(404).json({
         error: {
@@ -66,6 +74,102 @@ readingsRouter.post("/", async (req, res) => {
       error: {
         code: "INTERNAL_ERROR",
         message: "Erro interno ao gravar a leitura",
+      },
+    });
+  }
+});
+
+// ---------------------------------------------------------------
+// GET /readings?sensorId=1&from=...&to=...&limit=100
+// Lista leituras de um sensor, da mais recente para a mais antiga
+// ---------------------------------------------------------------
+const listReadingsSchema = z
+  .object({
+    sensorId: z.coerce
+      .number({ error: "sensorId é obrigatório e deve ser um número" })
+      .int("sensorId deve ser um número inteiro")
+      .positive("sensorId deve ser maior que zero"),
+    from: z.iso
+      .datetime({
+        offset: true,
+        error: "from deve ser uma data ISO 8601, ex.: 2026-10-28T00:00:00Z",
+      })
+      .optional(),
+    to: z.iso
+      .datetime({
+        offset: true,
+        error: "to deve ser uma data ISO 8601, ex.: 2026-10-29T00:00:00Z",
+      })
+      .optional(),
+    limit: z.coerce
+      .number({ error: "limit deve ser um número" })
+      .int("limit deve ser um número inteiro")
+      .min(1, "limit deve ser no mínimo 1")
+      .max(1000, "limit deve ser no máximo 1000")
+      .default(100),
+  })
+  .refine((q) => !q.from || !q.to || new Date(q.from) <= new Date(q.to), {
+    error: "from deve ser anterior ou igual a to",
+    path: ["from"],
+  });
+
+readingsRouter.get("/", async (req, res) => {
+  const parsed = listReadingsSchema.safeParse(req.query);
+
+  if (!parsed.success) {
+    sendValidationError(res, parsed.error);
+    return;
+  }
+
+  const { sensorId, from, to, limit } = parsed.data;
+
+  try {
+    const sensor = await pool.query("SELECT 1 FROM sensors WHERE id = $1", [
+      sensorId,
+    ]);
+
+    if (sensor.rowCount === 0) {
+      res.status(404).json({
+        error: {
+          code: "SENSOR_NOT_FOUND",
+          message: `Sensor ${sensorId} não existe`,
+        },
+      });
+      return;
+    }
+
+    // Só textos fixos são juntados no SQL; os valores vão por parâmetros ($1, $2...)
+    const conditions = ["sensor_id = $1"];
+    const params: unknown[] = [sensorId];
+
+    if (from) {
+      params.push(from);
+      conditions.push(`read_at >= $${params.length}`);
+    }
+
+    if (to) {
+      params.push(to);
+      conditions.push(`read_at <= $${params.length}`);
+    }
+
+    params.push(limit);
+
+    const result = await pool.query(
+      `SELECT id, sensor_id AS "sensorId", value, read_at AS "readAt"
+       FROM readings
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY read_at DESC
+       LIMIT $${params.length}`,
+      params
+    );
+
+    res.json({ count: result.rowCount, data: result.rows });
+  } catch (error) {
+    console.error("Erro ao listar leituras:", (error as Error).message);
+    res.status(500).json({
+      error: {
+        code: "INTERNAL_ERROR",
+        message: "Erro interno ao listar as leituras",
       },
     });
   }
