@@ -3,6 +3,7 @@ import express from "express";
 import { checkConnection } from "./db/pool";
 import { healthRouter } from "./routes/health";
 import { readingsRouter } from "./routes/readings";
+import { machinesRouter } from "./routes/machines";
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -11,6 +12,7 @@ app.use(express.json());
 
 app.use("/health", healthRouter);
 app.use("/readings", readingsRouter);
+app.use("/machines", machinesRouter);
 
 async function start() {
   try {
