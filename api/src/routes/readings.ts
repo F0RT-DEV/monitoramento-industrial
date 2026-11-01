@@ -1,24 +1,13 @@
-import { Router, type Response } from "express";
+import { Router } from "express";
 import { z } from "zod";
 import { pool } from "../db/pool";
+import { sendValidationError } from "../utils/http-errors";
 
 export const readingsRouter = Router();
 
-
-function sendValidationError(res: Response, error: z.ZodError) {
-  res.status(400).json({
-    error: {
-      code: "VALIDATION_ERROR",
-      message: "Dados inválidos",
-      details: error.issues.map((issue) => ({
-        field: issue.path.join("."),
-        message: issue.message,
-      })),
-    },
-  });
-}
-
-
+// ---------------------------------------------------------------
+// POST /readings: grava uma leitura
+// ---------------------------------------------------------------
 const createReadingSchema = z.object(
   {
     sensorId: z
@@ -56,7 +45,7 @@ readingsRouter.post("/", async (req, res) => {
 
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    
+    // 23503 = violação de chave estrangeira (o sensor não existe)
     if ((error as { code?: string }).code === "23503") {
       res.status(404).json({
         error: {
@@ -77,7 +66,10 @@ readingsRouter.post("/", async (req, res) => {
   }
 });
 
-
+// ---------------------------------------------------------------
+// GET /readings?sensorId=1&from=...&to=...&limit=100
+// Lista leituras de um sensor, da mais recente para a mais antiga
+// ---------------------------------------------------------------
 const listReadingsSchema = z
   .object({
     sensorId: z.coerce
@@ -133,7 +125,7 @@ readingsRouter.get("/", async (req, res) => {
       return;
     }
 
-    
+    // Só textos fixos são juntados no SQL; os valores vão por parâmetros ($1, $2...)
     const conditions = ["sensor_id = $1"];
     const params: unknown[] = [sensorId];
 

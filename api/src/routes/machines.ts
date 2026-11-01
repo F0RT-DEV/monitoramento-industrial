@@ -1,70 +1,15 @@
 import { Router } from "express";
-import { pool } from "../db/pool";
+import { z } from "zod";
+import { findMachine, listMachines } from "../services/machines";
+import { sendValidationError } from "../utils/http-errors";
 
 export const machinesRouter = Router();
 
-
+// GET /machines: todas as máquinas, com status e última leitura de cada sensor
 machinesRouter.get("/", async (_req, res) => {
   try {
-    
-    const query = `
-      SELECT 
-        m.id AS "machineId",
-        m.name AS "machineName",
-        m.sector,
-        m.operational_status AS "operationalStatus",
-        m.created_at AS "createdAt",
-        s.id AS "sensorId",
-        s.type AS "sensorType",
-        s.unit,
-        rd.value AS "lastValue",
-        rd.read_at AS "lastReadAt"
-      FROM machines m
-      LEFT JOIN sensors s ON m.id = s.machine_id
-      LEFT JOIN LATERAL (
-        SELECT value, read_at
-        FROM readings
-        WHERE sensor_id = s.id
-        ORDER BY read_at DESC
-        LIMIT 1
-      ) rd ON true
-      ORDER BY m.id, s.id;
-    `;
-
-    const result = await pool.query(query);
-
-    
-    const machinesMap = new Map();
-
-    for (const row of result.rows) {
-      if (!machinesMap.has(row.machineId)) {
-        machinesMap.set(row.machineId, {
-          id: row.machineId,
-          name: row.machineName,
-          sector: row.sector,
-          operationalStatus: row.operationalStatus,
-          createdAt: row.createdAt,
-          sensors: [],
-        });
-      }
-
-      if (row.sensorId) {
-        machinesMap.get(row.machineId).sensors.push({
-          id: row.sensorId,
-          type: row.sensorType,
-          unit: row.unit,
-          lastReading: row.lastValue !== null ? {
-            value: row.lastValue,
-            readAt: row.lastReadAt,
-          } : null,
-        });
-      }
-    }
-
-    res.json({
-      count: machinesMap.size,
-      data: Array.from(machinesMap.values()),
-    });
+    const machines = await listMachines();
+    res.json({ count: machines.length, data: machines });
   } catch (error) {
     console.error("Erro ao listar máquinas:", (error as Error).message);
     res.status(500).json({
@@ -76,67 +21,42 @@ machinesRouter.get("/", async (_req, res) => {
   }
 });
 
+// GET /machines/:id: uma máquina, com sensores e regras
+const idParamSchema = z.object({
+  id: z.coerce
+    .number({ error: "id deve ser um número" })
+    .int("id deve ser um número inteiro")
+    .positive("id deve ser maior que zero"),
+});
 
 machinesRouter.get("/:id", async (req, res) => {
-  const machineId = Number(req.params.id);
+  const parsed = idParamSchema.safeParse(req.params);
 
-  if (isNaN(machineId) || machineId <= 0) {
-    res.status(400).json({
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "O ID da máquina deve ser um número inteiro positivo",
-      },
-    });
+  if (!parsed.success) {
+    sendValidationError(res, parsed.error);
     return;
   }
 
   try {
-    const machineQuery = `
-      SELECT 
-        id AS "machineId",
-        name AS "machineName",
-        sector,
-        operational_status AS "operationalStatus",
-        created_at AS "createdAt"
-      FROM machines
-      WHERE id = $1;
-    `;
+    const machine = await findMachine(parsed.data.id);
 
-    const machineResult = await pool.query(machineQuery, [machineId]);
-
-    if (machineResult.rowCount === 0) {
+    if (!machine) {
       res.status(404).json({
         error: {
           code: "MACHINE_NOT_FOUND",
-          message: `Máquina com ID ${machineId} não encontrada`,
+          message: `Máquina ${parsed.data.id} não existe`,
         },
       });
       return;
     }
 
-    const machine = machineResult.rows[0];
-
-    const sensorsQuery = `
-      SELECT 
-        id AS "sensorId",
-        type,
-        unit
-      FROM sensors
-      WHERE machine_id = $1;
-    `;
-
-    const sensorsResult = await pool.query(sensorsQuery, [machineId]);
-
-    res.json({
-      ...machine,
-      sensors: sensorsResult.rows,
-    });
+    res.json(machine);
   } catch (error) {
-    console.error("Erro ao buscar detalhes da máquina:", (error as Error).message);
+    console.error("Erro ao buscar máquina:", (error as Error).message);
     res.status(500).json({
       error: {
         code: "INTERNAL_ERROR",
-        message: "Erro interno ao buscar detalhes da máquina",
+        message: "Erro interno ao buscar a máquina",
       },
     });
   }
