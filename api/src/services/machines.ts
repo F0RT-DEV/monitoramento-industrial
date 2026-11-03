@@ -34,8 +34,6 @@ interface RuleRow {
   active: boolean;
 }
 
-// Carrega máquinas (todas, ou só uma) com sensores, última leitura e nível de alerta.
-// $1 NULL = sem filtro; $1 preenchido = só aquela máquina.
 async function loadMachines(machineId: number | null) {
   const machines = await pool.query<MachineRow>(
     `SELECT id, name, sector,
@@ -47,8 +45,6 @@ async function loadMachines(machineId: number | null) {
     [machineId]
   );
 
-  // LATERAL: para cada sensor, busca só a leitura mais recente (usa o índice
-  // de readings e continua rápido mesmo com muitas leituras).
   const sensors = await pool.query<SensorRow>(
     `SELECT s.id, s.machine_id AS "machineId", s.type, s.unit,
             lr.value AS "lastValue", lr.read_at AS "lastReadAt"
@@ -65,7 +61,6 @@ async function loadMachines(machineId: number | null) {
     [machineId]
   );
 
-  // Alertas abertos (acknowledged_at IS NULL) por máquina
   const alerts = await pool.query<AlertSummaryRow>(
     `SELECT s.machine_id AS "machineId",
             count(*) AS "openAlerts",
@@ -84,7 +79,6 @@ async function loadMachines(machineId: number | null) {
   return machines.rows.map((machine) => {
     const summary = alertsByMachine.get(machine.id);
 
-    // O nível do painel não é guardado: é calculado a partir dos alertas abertos
     let alertLevel: AlertLevel = "normal";
     if (summary) {
       alertLevel = summary.hasCritical ? "critical" : "warning";
@@ -113,7 +107,6 @@ export async function listMachines() {
   return loadMachines(null);
 }
 
-// Uma máquina, com as regras de cada sensor. Devolve null se não existir.
 export async function findMachine(id: number) {
   const [machine] = await loadMachines(id);
 

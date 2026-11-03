@@ -5,7 +5,6 @@ import { sendValidationError } from "../utils/http-errors";
 
 export const machinesRouter = Router();
 
-// GET /machines: todas as máquinas, com status e última leitura de cada sensor
 machinesRouter.get("/", async (_req, res) => {
   try {
     const machines = await listMachines();
@@ -21,7 +20,6 @@ machinesRouter.get("/", async (_req, res) => {
   }
 });
 
-// GET /machines/:id: uma máquina, com sensores e regras
 const idParamSchema = z.object({
   id: z.coerce
     .number({ error: "id deve ser um número" })
