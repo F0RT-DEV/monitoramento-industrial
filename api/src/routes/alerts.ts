@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { acknowledgeAlert, listAlerts } from "../services/alerts";
-import { sendValidationError } from "../utils/http-errors";
+import { AppError, parseOrThrow } from "../utils/errors";
 
 export const alertsRouter = Router();
 
@@ -20,25 +20,10 @@ const listAlertsSchema = z.object({
 });
 
 alertsRouter.get("/", async (req, res) => {
-  const parsed = listAlertsSchema.safeParse(req.query);
+  const { status, limit } = parseOrThrow(listAlertsSchema, req.query);
 
-  if (!parsed.success) {
-    sendValidationError(res, parsed.error);
-    return;
-  }
-
-  try {
-    const alerts = await listAlerts(parsed.data.status, parsed.data.limit);
-    res.json({ count: alerts.length, data: alerts });
-  } catch (error) {
-    console.error("Erro ao listar alertas:", (error as Error).message);
-    res.status(500).json({
-      error: {
-        code: "INTERNAL_ERROR",
-        message: "Erro interno ao listar os alertas",
-      },
-    });
-  }
+  const alerts = await listAlerts(status, limit);
+  res.json({ count: alerts.length, data: alerts });
 });
 
 
@@ -50,34 +35,13 @@ const idParamSchema = z.object({
 });
 
 alertsRouter.patch("/:id/ack", async (req, res) => {
-  const parsed = idParamSchema.safeParse(req.params);
+  const { id } = parseOrThrow(idParamSchema, req.params);
 
-  if (!parsed.success) {
-    sendValidationError(res, parsed.error);
-    return;
+  const alert = await acknowledgeAlert(id);
+
+  if (!alert) {
+    throw new AppError(404, "ALERT_NOT_FOUND", `Alerta ${id} não existe`);
   }
 
-  try {
-    const alert = await acknowledgeAlert(parsed.data.id);
-
-    if (!alert) {
-      res.status(404).json({
-        error: {
-          code: "ALERT_NOT_FOUND",
-          message: `Alerta ${parsed.data.id} não existe`,
-        },
-      });
-      return;
-    }
-
-    res.json(alert);
-  } catch (error) {
-    console.error("Erro ao reconhecer alerta:", (error as Error).message);
-    res.status(500).json({
-      error: {
-        code: "INTERNAL_ERROR",
-        message: "Erro interno ao reconhecer o alerta",
-      },
-    });
-  }
+  res.json(alert);
 });

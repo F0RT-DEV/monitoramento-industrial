@@ -1,13 +1,10 @@
 import { Router } from "express";
 import { z } from "zod";
 import { pool } from "../db/pool";
-import { sendValidationError } from "../utils/http-errors";
+import { AppError, parseOrThrow } from "../utils/errors";
 
 export const readingsRouter = Router();
 
-// ---------------------------------------------------------------
-// POST /readings: grava uma leitura
-// ---------------------------------------------------------------
 const createReadingSchema = z.object(
   {
     sensorId: z
@@ -26,14 +23,7 @@ const createReadingSchema = z.object(
 );
 
 readingsRouter.post("/", async (req, res) => {
-  const parsed = createReadingSchema.safeParse(req.body);
-
-  if (!parsed.success) {
-    sendValidationError(res, parsed.error);
-    return;
-  }
-
-  const { sensorId, value, readAt } = parsed.data;
+  const { sensorId, value, readAt } = parseOrThrow(createReadingSchema, req.body);
 
   try {
     const result = await pool.query(
@@ -45,31 +35,16 @@ readingsRouter.post("/", async (req, res) => {
 
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    // 23503 = violação de chave estrangeira (o sensor não existe)
+    
     if ((error as { code?: string }).code === "23503") {
-      res.status(404).json({
-        error: {
-          code: "SENSOR_NOT_FOUND",
-          message: `Sensor ${sensorId} não existe`,
-        },
-      });
-      return;
+      throw new AppError(404, "SENSOR_NOT_FOUND", `Sensor ${sensorId} não existe`);
     }
 
-    console.error("Erro ao gravar leitura:", (error as Error).message);
-    res.status(500).json({
-      error: {
-        code: "INTERNAL_ERROR",
-        message: "Erro interno ao gravar a leitura",
-      },
-    });
+    throw error;
   }
 });
 
-// ---------------------------------------------------------------
-// GET /readings?sensorId=1&from=...&to=...&limit=100
-// Lista leituras de um sensor, da mais recente para a mais antiga
-// ---------------------------------------------------------------
+
 const listReadingsSchema = z
   .object({
     sensorId: z.coerce
@@ -101,63 +76,37 @@ const listReadingsSchema = z
   });
 
 readingsRouter.get("/", async (req, res) => {
-  const parsed = listReadingsSchema.safeParse(req.query);
+  const { sensorId, from, to, limit } = parseOrThrow(listReadingsSchema, req.query);
 
-  if (!parsed.success) {
-    sendValidationError(res, parsed.error);
-    return;
+  const sensor = await pool.query("SELECT 1 FROM sensors WHERE id = $1", [sensorId]);
+
+  if (sensor.rowCount === 0) {
+    throw new AppError(404, "SENSOR_NOT_FOUND", `Sensor ${sensorId} não existe`);
   }
 
-  const { sensorId, from, to, limit } = parsed.data;
+  const conditions = ["sensor_id = $1"];
+  const params: unknown[] = [sensorId];
 
-  try {
-    const sensor = await pool.query("SELECT 1 FROM sensors WHERE id = $1", [
-      sensorId,
-    ]);
-
-    if (sensor.rowCount === 0) {
-      res.status(404).json({
-        error: {
-          code: "SENSOR_NOT_FOUND",
-          message: `Sensor ${sensorId} não existe`,
-        },
-      });
-      return;
-    }
-
-    // Só textos fixos são juntados no SQL; os valores vão por parâmetros ($1, $2...)
-    const conditions = ["sensor_id = $1"];
-    const params: unknown[] = [sensorId];
-
-    if (from) {
-      params.push(from);
-      conditions.push(`read_at >= $${params.length}`);
-    }
-
-    if (to) {
-      params.push(to);
-      conditions.push(`read_at <= $${params.length}`);
-    }
-
-    params.push(limit);
-
-    const result = await pool.query(
-      `SELECT id, sensor_id AS "sensorId", value, read_at AS "readAt"
-       FROM readings
-       WHERE ${conditions.join(" AND ")}
-       ORDER BY read_at DESC
-       LIMIT $${params.length}`,
-      params
-    );
-
-    res.json({ count: result.rowCount, data: result.rows });
-  } catch (error) {
-    console.error("Erro ao listar leituras:", (error as Error).message);
-    res.status(500).json({
-      error: {
-        code: "INTERNAL_ERROR",
-        message: "Erro interno ao listar as leituras",
-      },
-    });
+  if (from) {
+    params.push(from);
+    conditions.push(`read_at >= $${params.length}`);
   }
+
+  if (to) {
+    params.push(to);
+    conditions.push(`read_at <= $${params.length}`);
+  }
+
+  params.push(limit);
+
+  const result = await pool.query(
+    `SELECT id, sensor_id AS "sensorId", value, read_at AS "readAt"
+     FROM readings
+     WHERE ${conditions.join(" AND ")}
+     ORDER BY read_at DESC
+     LIMIT $${params.length}`,
+    params
+  );
+
+  res.json({ count: result.rowCount, data: result.rows });
 });
