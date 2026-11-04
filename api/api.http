@@ -1,0 +1,114 @@
+# API de monitoramento - exemplos de requisições
+# Precisa da extensão REST Client no VS Code. Suba a API com npm run dev.
+
+@baseUrl = http://localhost:3000
+
+
+### health
+GET {{baseUrl}}/health
+
+
+### ---------- readings ----------
+
+### cria leitura (201)
+POST {{baseUrl}}/readings
+Content-Type: application/json
+
+{
+  "sensorId": 1,
+  "value": 72.5
+}
+
+### cria leitura com data (201)
+POST {{baseUrl}}/readings
+Content-Type: application/json
+
+{
+  "sensorId": 1,
+  "value": 95,
+  "readAt": "2026-11-04T10:00:00Z"
+}
+
+### erro: value não é número (400)
+POST {{baseUrl}}/readings
+Content-Type: application/json
+
+{
+  "sensorId": 1,
+  "value": "abc"
+}
+
+### erro: sensor não existe (404)
+POST {{baseUrl}}/readings
+Content-Type: application/json
+
+{
+  "sensorId": 999,
+  "value": 1
+}
+
+### erro: JSON quebrado (400)
+POST {{baseUrl}}/readings
+Content-Type: application/json
+
+{ "sensorId": 1,
+
+### lista leituras de um sensor
+GET {{baseUrl}}/readings?sensorId=1&limit=10
+
+### lista leituras num período
+GET {{baseUrl}}/readings?sensorId=1&from=2026-11-01T00:00:00Z&to=2026-11-05T00:00:00Z
+
+### erro: sem sensorId (400)
+GET {{baseUrl}}/readings
+
+### erro: from depois de to (400)
+GET {{baseUrl}}/readings?sensorId=1&from=2026-11-05T00:00:00Z&to=2026-11-01T00:00:00Z
+
+### erro: sensor não existe (404)
+GET {{baseUrl}}/readings?sensorId=999
+
+
+### ---------- machines ----------
+
+### lista máquinas
+GET {{baseUrl}}/machines
+
+### detalhe da máquina 1
+GET {{baseUrl}}/machines/1
+
+### erro: máquina não existe (404)
+GET {{baseUrl}}/machines/999
+
+### erro: id inválido (400)
+GET {{baseUrl}}/machines/abc
+
+
+### ---------- alerts ----------
+
+### lista todos
+GET {{baseUrl}}/alerts
+
+### só os abertos
+GET {{baseUrl}}/alerts?status=open&limit=20
+
+### só os reconhecidos
+GET {{baseUrl}}/alerts?status=acknowledged
+
+### erro: status inválido (400)
+GET {{baseUrl}}/alerts?status=foo
+
+### reconhece o alerta 1 (pode repetir, a data original não muda)
+PATCH {{baseUrl}}/alerts/1/ack
+
+### erro: alerta não existe (404)
+PATCH {{baseUrl}}/alerts/999/ack
+
+### erro: id inválido (400)
+PATCH {{baseUrl}}/alerts/abc/ack
+
+
+### ---------- rota que não existe ----------
+
+### (404)
+GET {{baseUrl}}/nada
