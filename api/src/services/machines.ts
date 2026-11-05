@@ -34,6 +34,7 @@ interface RuleRow {
   active: boolean;
 }
 
+
 async function loadMachines(machineId: number | null) {
   const machines = await pool.query<MachineRow>(
     `SELECT id, name, sector,
@@ -45,6 +46,7 @@ async function loadMachines(machineId: number | null) {
     [machineId]
   );
 
+  
   const sensors = await pool.query<SensorRow>(
     `SELECT s.id, s.machine_id AS "machineId", s.type, s.unit,
             lr.value AS "lastValue", lr.read_at AS "lastReadAt"
@@ -60,6 +62,7 @@ async function loadMachines(machineId: number | null) {
      ORDER BY s.machine_id, s.type`,
     [machineId]
   );
+
 
   const alerts = await pool.query<AlertSummaryRow>(
     `SELECT s.machine_id AS "machineId",
@@ -79,6 +82,7 @@ async function loadMachines(machineId: number | null) {
   return machines.rows.map((machine) => {
     const summary = alertsByMachine.get(machine.id);
 
+    
     let alertLevel: AlertLevel = "normal";
     if (summary) {
       alertLevel = summary.hasCritical ? "critical" : "warning";
@@ -106,6 +110,21 @@ async function loadMachines(machineId: number | null) {
 export async function listMachines() {
   return loadMachines(null);
 }
+
+
+export async function updateMachineStatus(id: number, status: string) {
+  const result = await pool.query(
+    "UPDATE machines SET operational_status = $1 WHERE id = $2",
+    [status, id]
+  );
+
+  if (result.rowCount === 0) {
+    return null;
+  }
+
+  return findMachine(id);
+}
+
 
 export async function findMachine(id: number) {
   const [machine] = await loadMachines(id);

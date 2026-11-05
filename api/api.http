@@ -83,6 +83,29 @@ GET {{baseUrl}}/machines/999
 ### erro: id inválido (400)
 GET {{baseUrl}}/machines/abc
 
+### troca o status da máquina (200)
+PATCH {{baseUrl}}/machines/1/status
+Content-Type: application/json
+
+{
+  "status": "maintenance"
+}
+
+### erro: status inválido (400)
+PATCH {{baseUrl}}/machines/1/status
+Content-Type: application/json
+
+{
+  "status": "quebrada"
+}
+
+### erro: máquina não existe (404)
+PATCH {{baseUrl}}/machines/999/status
+Content-Type: application/json
+
+{
+  "status": "running"
+}
 
 ### ---------- alerts ----------
 
