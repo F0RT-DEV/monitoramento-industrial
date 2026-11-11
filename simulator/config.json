@@ -1,0 +1,9 @@
+{
+  "api_url": "http://localhost:3000",
+  "intervalo": 2,
+  "ciclos": 10,
+  "perfis": {
+    "temperature": { "base": 60.0, "variacao": 3.0, "ruido": 1.5 },
+    "vibration":   { "base": 2.5,  "variacao": 0.5, "ruido": 0.3 }
+  }
+}

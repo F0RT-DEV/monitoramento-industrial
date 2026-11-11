@@ -1,53 +1,84 @@
+import json
 import math
 import random
 import time
 
 import requests
 
-API_URL = "http://localhost:3000"
-SENSOR_ID = 1  
-VALOR_BASE = 60.0   
-VARIACAO_LENTA = 3.0  
-RUIDO = 1.5         
-INTERVALO = 2 
-TOTAL_LEITURAS = 20
+
+def carregar_config(caminho="config.json"):
+    with open(caminho, encoding="utf-8") as arquivo:
+        return json.load(arquivo)
 
 
-def gerar_valor(passo):
-    # onda lenta + ruído aleatório (distribuição normal)
-    onda = VARIACAO_LENTA * math.sin(passo / 10)
-    ruido = random.gauss(0, RUIDO)
-    return round(VALOR_BASE + onda + ruido, 2)
+def buscar_sensores(api_url):
+    # A lista de sensores vem da própria API (GET /machines)
+    resposta = requests.get(f"{api_url}/machines", timeout=5)
+    resposta.raise_for_status()
+
+    sensores = []
+    for maquina in resposta.json()["data"]:
+        for sensor in maquina["sensors"]:
+            sensores.append(
+                {
+                    "id": sensor["id"],
+                    "tipo": sensor["type"],
+                    "maquina": maquina["name"],
+                    # fase aleatória: cada sensor sobe e desce em um momento diferente
+                    "fase": random.uniform(0, 2 * math.pi),
+                }
+            )
+    return sensores
 
 
-def enviar_leitura(valor):
+def gerar_valor(perfil, passo, fase):
+    onda = perfil["variacao"] * math.sin(passo / 10 + fase)
+    ruido = random.gauss(0, perfil["ruido"])
+    return round(perfil["base"] + onda + ruido, 2)
+
+
+def enviar_leitura(api_url, sensor_id, valor):
     resposta = requests.post(
-        f"{API_URL}/readings",
-        json={"sensorId": SENSOR_ID, "value": valor},
+        f"{api_url}/readings",
+        json={"sensorId": sensor_id, "value": valor},
         timeout=5,
     )
     return resposta.status_code
 
 
 def main():
-    print(f"Enviando {TOTAL_LEITURAS} leituras para o sensor {SENSOR_ID}. Ctrl+C para parar.")
-    valores = []
+    config = carregar_config()
+    api_url = config["api_url"]
+    perfis = config["perfis"]
+
     try:
-        for passo in range(TOTAL_LEITURAS):
-            valor = gerar_valor(passo)
-            valores.append(valor)
+        sensores = buscar_sensores(api_url)
+    except requests.exceptions.RequestException as erro:
+        print(f"Não consegui buscar os sensores na API: {erro}")
+        return
 
-            try:
-                status = enviar_leitura(valor)
-                print(f"[{passo + 1}/{TOTAL_LEITURAS}] valor={valor} -> {status}")
-            except requests.exceptions.RequestException as erro:
-                print(f"[{passo + 1}/{TOTAL_LEITURAS}] falha ao enviar: {erro}")
+    # só simula sensores que tenham um perfil na configuração
+    sensores = [s for s in sensores if s["tipo"] in perfis]
+    print(f"{len(sensores)} sensores, {config['ciclos']} ciclos. Ctrl+C para parar.")
 
-            time.sleep(INTERVALO)
+    try:
+        for ciclo in range(config["ciclos"]):
+            for sensor in sensores:
+                valor = gerar_valor(perfis[sensor["tipo"]], ciclo, sensor["fase"])
+
+                try:
+                    status = enviar_leitura(api_url, sensor["id"], valor)
+                    print(
+                        f"[ciclo {ciclo + 1}] {sensor['maquina']} / "
+                        f"{sensor['tipo']} (id {sensor['id']}): {valor} -> {status}"
+                    )
+                except requests.exceptions.RequestException as erro:
+                    print(f"[ciclo {ciclo + 1}] sensor {sensor['id']}: falha ao enviar ({erro})")
+
+            time.sleep(config["intervalo"])
     except KeyboardInterrupt:
         print("\nParado.")
-    if valores:
-        print(f"Resumo: menor={min(valores)} maior={max(valores)} amplitude={round(max(valores) - min(valores), 2)}")
+
 
 if __name__ == "__main__":
     main()
