@@ -24,17 +24,34 @@ def buscar_sensores(api_url):
                     "id": sensor["id"],
                     "tipo": sensor["type"],
                     "maquina": maquina["name"],
-                    # fase aleatória: cada sensor sobe e desce em um momento diferente
                     "fase": random.uniform(0, 2 * math.pi),
+                    # estado da anomalia: quantos ciclos faltam e quanto ela soma ao valor
+                    "anomalia_restante": 0,
+                    "anomalia_delta": 0.0,
                 }
             )
     return sensores
 
 
-def gerar_valor(perfil, passo, fase):
-    onda = perfil["variacao"] * math.sin(passo / 10 + fase)
+def gerar_valor(perfil, passo, sensor, anomalias):
+    onda = perfil["variacao"] * math.sin(passo / 10 + sensor["fase"])
     ruido = random.gauss(0, perfil["ruido"])
-    return round(perfil["base"] + onda + ruido, 2)
+    valor = perfil["base"] + onda + ruido
+
+    # Anomalia: começa por sorteio e dura alguns ciclos seguidos
+    if sensor["anomalia_restante"] == 0 and random.random() < anomalias["probabilidade"]:
+        sensor["anomalia_restante"] = random.randint(
+            anomalias["duracao_min"], anomalias["duracao_max"]
+        )
+        faixa = perfil["anomalia"]
+        sensor["anomalia_delta"] = random.uniform(faixa["delta_min"], faixa["delta_max"])
+
+    em_anomalia = sensor["anomalia_restante"] > 0
+    if em_anomalia:
+        valor += sensor["anomalia_delta"]
+        sensor["anomalia_restante"] -= 1
+
+    return round(max(valor, 0), 2), em_anomalia
 
 
 def enviar_leitura(api_url, sensor_id, valor):
@@ -50,6 +67,7 @@ def main():
     config = carregar_config()
     api_url = config["api_url"]
     perfis = config["perfis"]
+    anomalias = config["anomalias"]
 
     try:
         sensores = buscar_sensores(api_url)
@@ -57,20 +75,20 @@ def main():
         print(f"Não consegui buscar os sensores na API: {erro}")
         return
 
-    # só simula sensores que tenham um perfil na configuração
     sensores = [s for s in sensores if s["tipo"] in perfis]
     print(f"{len(sensores)} sensores, {config['ciclos']} ciclos. Ctrl+C para parar.")
 
     try:
         for ciclo in range(config["ciclos"]):
             for sensor in sensores:
-                valor = gerar_valor(perfis[sensor["tipo"]], ciclo, sensor["fase"])
+                valor, em_anomalia = gerar_valor(perfis[sensor["tipo"]], ciclo, sensor, anomalias)
+                marca = "  <-- ANOMALIA" if em_anomalia else ""
 
                 try:
                     status = enviar_leitura(api_url, sensor["id"], valor)
                     print(
                         f"[ciclo {ciclo + 1}] {sensor['maquina']} / "
-                        f"{sensor['tipo']} (id {sensor['id']}): {valor} -> {status}"
+                        f"{sensor['tipo']} (id {sensor['id']}): {valor} -> {status}{marca}"
                     )
                 except requests.exceptions.RequestException as erro:
                     print(f"[ciclo {ciclo + 1}] sensor {sensor['id']}: falha ao enviar ({erro})")
