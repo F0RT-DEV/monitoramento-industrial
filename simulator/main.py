@@ -14,7 +14,7 @@ def carregar_config(caminho="config.json"):
 
 
 def ler_numero(nome, padrao, tipo, minimo):
-    # Lê uma variável de ambiente. Se não existir, usa o valor padrão da config.
+   
     texto = os.getenv(nome)
     if texto is None or texto == "":
         return padrao
@@ -27,9 +27,31 @@ def ler_numero(nome, padrao, tipo, minimo):
     return valor
 
 
-def buscar_sensores(api_url, num_maquinas=None):
-    # A lista de sensores vem da própria API (GET /machines)
-    resposta = requests.get(f"{api_url}/machines", timeout=5)
+def requisitar(metodo, url, retry, **kwargs):
+    
+    tentativas = retry["tentativas"]
+    motivo = ""
+
+    for tentativa in range(1, tentativas + 1):
+        try:
+            resposta = requests.request(metodo, url, timeout=5, **kwargs)
+            if resposta.status_code < 500:
+                return resposta
+            motivo = f"HTTP {resposta.status_code}"
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as erro:
+            motivo = type(erro).__name__
+
+        if tentativa < tentativas:
+            espera = retry["espera"] * 2 ** (tentativa - 1) 
+            print(f"  falhou ({motivo}). Tentativa {tentativa}/{tentativas}, nova em {espera}s")
+            time.sleep(espera)
+
+    raise requests.exceptions.RequestException(f"{motivo} depois de {tentativas} tentativas")
+
+
+def buscar_sensores(api_url, retry, num_maquinas=None):
+    
+    resposta = requisitar("GET", f"{api_url}/machines", retry)
     resposta.raise_for_status()
 
     maquinas = resposta.json()["data"]
@@ -45,7 +67,6 @@ def buscar_sensores(api_url, num_maquinas=None):
                     "tipo": sensor["type"],
                     "maquina": maquina["name"],
                     "fase": random.uniform(0, 2 * math.pi),
-                    # estado da anomalia: quantos ciclos faltam e quanto ela soma ao valor
                     "anomalia_restante": 0,
                     "anomalia_delta": 0.0,
                 }
@@ -58,7 +79,6 @@ def gerar_valor(perfil, passo, sensor, anomalias):
     ruido = random.gauss(0, perfil["ruido"])
     valor = perfil["base"] + onda + ruido
 
-    # Anomalia: começa por sorteio e dura alguns ciclos seguidos
     if sensor["anomalia_restante"] == 0 and random.random() < anomalias["probabilidade"]:
         sensor["anomalia_restante"] = random.randint(
             anomalias["duracao_min"], anomalias["duracao_max"]
@@ -74,11 +94,12 @@ def gerar_valor(perfil, passo, sensor, anomalias):
     return round(max(valor, 0), 2), em_anomalia
 
 
-def enviar_leitura(api_url, sensor_id, valor):
-    resposta = requests.post(
+def enviar_leitura(api_url, retry, sensor_id, valor):
+    resposta = requisitar(
+        "POST",
         f"{api_url}/readings",
+        retry,
         json={"sensorId": sensor_id, "value": valor},
-        timeout=5,
     )
     return resposta.status_code
 
@@ -88,14 +109,17 @@ def main():
     perfis = config["perfis"]
     anomalias = config["anomalias"]
 
-    # Variáveis de ambiente têm prioridade sobre o config.json
     api_url = os.getenv("API_URL") or config["api_url"]
     intervalo = ler_numero("INTERVALO", config["intervalo"], float, 0)
     ciclos = ler_numero("CICLOS", config["ciclos"], int, 0)  # 0 = não para
     num_maquinas = ler_numero("NUM_MAQUINAS", None, int, 1)  # vazio = todas
+    retry = {
+        "tentativas": ler_numero("TENTATIVAS", config["tentativas"], int, 1),
+        "espera": config["espera"],
+    }
 
     try:
-        sensores = buscar_sensores(api_url, num_maquinas)
+        sensores = buscar_sensores(api_url, retry, num_maquinas)
     except requests.exceptions.RequestException as erro:
         print(f"Não consegui buscar os sensores na API: {erro}")
         return
@@ -104,6 +128,9 @@ def main():
     duracao = f"{ciclos} ciclos" if ciclos > 0 else "sem limite de ciclos"
     print(f"API {api_url} | {len(sensores)} sensores | {duracao} | intervalo {intervalo}s. Ctrl+C para parar.")
 
+    enviadas = 0
+    perdidas = 0
+
     try:
         for ciclo in (range(ciclos) if ciclos > 0 else itertools.count()):
             for sensor in sensores:
@@ -111,17 +138,21 @@ def main():
                 marca = "  <-- ANOMALIA" if em_anomalia else ""
 
                 try:
-                    status = enviar_leitura(api_url, sensor["id"], valor)
+                    status = enviar_leitura(api_url, retry, sensor["id"], valor)
+                    enviadas += 1
                     print(
                         f"[ciclo {ciclo + 1}] {sensor['maquina']} / "
                         f"{sensor['tipo']} (id {sensor['id']}): {valor} -> {status}{marca}"
                     )
                 except requests.exceptions.RequestException as erro:
-                    print(f"[ciclo {ciclo + 1}] sensor {sensor['id']}: falha ao enviar ({erro})")
+                    perdidas += 1
+                    print(f"[ciclo {ciclo + 1}] sensor {sensor['id']}: leitura perdida ({erro})")
 
             time.sleep(intervalo)
     except KeyboardInterrupt:
         print("\nParado.")
+
+    print(f"Resumo: {enviadas} leituras enviadas, {perdidas} perdidas.")
 
 
 if __name__ == "__main__":

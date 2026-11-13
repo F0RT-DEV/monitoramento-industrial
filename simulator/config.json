@@ -1,7 +1,9 @@
 {
   "api_url": "http://localhost:3000",
-  "intervalo": 2,
-  "ciclos": 10,
+  "intervalo": 1,
+  "ciclos": 30,
+  "tentativas": 6,
+  "espera": 1,
   "anomalias": {
     "probabilidade": 0.05,
     "duracao_min": 2,
@@ -9,12 +11,22 @@
   },
   "perfis": {
     "temperature": {
-      "base": 60.0, "variacao": 3.0, "ruido": 1.5,
-      "anomalia": { "delta_min": 20, "delta_max": 35 }
+      "base": 60.0,
+      "variacao": 3.0,
+      "ruido": 1.5,
+      "anomalia": {
+        "delta_min": 20,
+        "delta_max": 35
+      }
     },
     "vibration": {
-      "base": 2.5, "variacao": 0.5, "ruido": 0.3,
-      "anomalia": { "delta_min": 3.5, "delta_max": 6 }
+      "base": 2.5,
+      "variacao": 0.5,
+      "ruido": 0.3,
+      "anomalia": {
+        "delta_min": 3.5,
+        "delta_max": 6
+      }
     }
   }
 }
