@@ -1,9 +1,14 @@
 {
   "api_url": "http://localhost:3000",
-  "intervalo": 1,
-  "ciclos": 30,
-  "tentativas": 6,
+  "intervalo": 2,
+  "ciclos": 10,
+  "tentativas": 3,
   "espera": 1,
+  "status_maquina": {
+    "probabilidade": 1.0,
+    "duracao_min": 3,
+    "duracao_max": 8
+  },
   "anomalias": {
     "probabilidade": 0.05,
     "duracao_min": 2,
